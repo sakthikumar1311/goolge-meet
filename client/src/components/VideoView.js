@@ -8,7 +8,7 @@ if (Platform.OS !== 'web') {
     RTCView = require('react-native-webrtc').RTCView;
 }
 
-export default function VideoView({ stream, name, isLocal = false, isMuted = false }) {
+export default function VideoView({ stream, name, isLocal = false, isMuted = false, isActiveSpeaker = false, isSharing = false }) {
     const videoRef = useRef(null);
 
     useEffect(() => {
@@ -18,10 +18,12 @@ export default function VideoView({ stream, name, isLocal = false, isMuted = fal
     }, [stream]);
 
     const renderVideo = () => {
-        if (!stream) {
+        if (!stream && !isSharing) {
             return (
                 <View style={styles.placeholder}>
-                    <Text style={styles.placeholderText}>{name ? name.charAt(0).toUpperCase() : '?'}</Text>
+                    <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{name ? name.charAt(0).toUpperCase() : '?'}</Text>
+                    </View>
                 </View>
             );
         }
@@ -37,7 +39,7 @@ export default function VideoView({ stream, name, isLocal = false, isMuted = fal
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
-                        transform: isLocal ? 'scaleX(-1)' : 'none',
+                        transform: (isLocal && !isSharing) ? 'scaleX(-1)' : 'none',
                     }}
                 />
             );
@@ -49,7 +51,7 @@ export default function VideoView({ stream, name, isLocal = false, isMuted = fal
                     streamURL={stream.toURL()}
                     style={styles.rtcView}
                     objectFit="cover"
-                    mirror={isLocal}
+                    mirror={isLocal && !isSharing}
                 />
             );
         }
@@ -58,14 +60,27 @@ export default function VideoView({ stream, name, isLocal = false, isMuted = fal
     };
 
     return (
-        <View style={styles.container}>
-            {renderVideo()}
-            <View style={styles.infoBadge}>
-                <Text style={styles.infoText}>{isLocal ? 'You' : name}</Text>
+        <View style={[styles.container, isActiveSpeaker && styles.activeSpeakerContainer]}>
+            <View style={styles.videoContainer}>
+                {renderVideo()}
             </View>
-            {isMuted && (
-                <View style={styles.muteBadge}>
-                    <Text style={styles.muteText}>Muted</Text>
+
+            <View style={styles.badgeContainer}>
+                <View style={styles.infoBadge}>
+                    {isMuted && <View style={styles.micOffIcon}><Text style={styles.micOffText}>Muted</Text></View>}
+                    <Text style={styles.infoText}>{isLocal ? 'You' : name}</Text>
+                </View>
+            </View>
+
+            {isSharing && (
+                <View style={styles.sharingBadge}>
+                    <Text style={styles.sharingText}>Screen sharing</Text>
+                </View>
+            )}
+
+            {isActiveSpeaker && (
+                <View style={styles.speakerBadge}>
+                    <View style={styles.speakerDot} />
                 </View>
             )}
         </View>
@@ -79,53 +94,92 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         overflow: 'hidden',
         position: 'relative',
-        margin: Spacing.s,
+        margin: Spacing.xs,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    activeSpeakerContainer: {
+        borderColor: Colors.primary,
+    },
+    videoContainer: {
+        flex: 1,
     },
     rtcView: {
         flex: 1,
     },
-    webVideo: {
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: [{ scaleX: -1 }], // For mirroring if needed, usually local only
-    },
     placeholder: {
         flex: 1,
-        backgroundColor: Colors.secondary,
+        backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    placeholderText: {
-        fontSize: 48,
+    avatar: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarText: {
+        fontSize: 32,
         color: Colors.white,
         fontWeight: 'bold',
     },
-    infoBadge: {
+    badgeContainer: {
         position: 'absolute',
         bottom: Spacing.s,
         left: Spacing.s,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        right: Spacing.s,
+        flexDirection: 'row',
+    },
+    infoBadge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
         paddingHorizontal: Spacing.s,
-        paddingVertical: 2,
+        paddingVertical: 4,
         borderRadius: 4,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     infoText: {
         color: Colors.white,
         fontSize: 12,
+        fontWeight: '500',
     },
-    muteBadge: {
+    micOffIcon: {
+        marginRight: Spacing.xs,
+        backgroundColor: Colors.error,
+        paddingHorizontal: 4,
+        borderRadius: 2,
+    },
+    micOffText: {
+        color: Colors.white,
+        fontSize: 8,
+        fontWeight: 'bold',
+    },
+    sharingBadge: {
         position: 'absolute',
         top: Spacing.s,
-        right: Spacing.s,
-        backgroundColor: Colors.error,
+        left: Spacing.s,
+        backgroundColor: Colors.primary,
         paddingHorizontal: Spacing.s,
         paddingVertical: 2,
         borderRadius: 4,
     },
-    muteText: {
+    sharingText: {
         color: Colors.white,
         fontSize: 10,
         fontWeight: 'bold',
+    },
+    speakerBadge: {
+        position: 'absolute',
+        top: Spacing.s,
+        right: Spacing.s,
+    },
+    speakerDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: Colors.primary,
     },
 });

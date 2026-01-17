@@ -5,10 +5,19 @@ import VideoView from '../components/VideoView';
 import MeetingControls from '../components/MeetingControls';
 import Whiteboard from '../components/Whiteboard';
 import ParticipantList from '../components/ParticipantList';
+import { Users } from 'lucide-react-native';
 import SocketService from '../services/SocketService';
 import WebRTCService from '../services/WebRTCService';
 
-const { width } = Dimensions.get('window');
+// Safe dimension access for web
+const getScreenWidth = () => {
+    try {
+        return Dimensions.get('window').width;
+    } catch (e) {
+        return 400; // Fallback
+    }
+};
+const SCREEN_WIDTH = getScreenWidth();
 
 // Conditional require for native-only libraries
 let nativeMediaDevices;
@@ -17,25 +26,32 @@ if (Platform.OS !== 'web') {
 }
 
 const getMediaDevices = () => {
-    return Platform.OS === 'web' ? navigator.mediaDevices : nativeMediaDevices;
+    if (Platform.OS === 'web') {
+        return (typeof navigator !== 'undefined' && navigator.mediaDevices) ? navigator.mediaDevices : null;
+    }
+    return nativeMediaDevices;
 };
 
 export default function MeetingScreen({ route, navigation }) {
-    const { roomID } = route.params;
+    const { roomID, initialMic = true, initialCam = true } = route.params;
     const [localStream, setLocalStream] = useState(null);
     const [remoteStreams, setRemoteStreams] = useState([]);
-    const [isMicOn, setIsMicOn] = useState(true);
-    const [isCamOn, setIsCamOn] = useState(true);
+    const [isMicOn, setIsMicOn] = useState(initialMic);
+    const [isCamOn, setIsCamOn] = useState(initialCam);
     const [isSharingScreen, setIsSharingScreen] = useState(false);
     const [isWhiteboardVisible, setIsWhiteboardVisible] = useState(false);
     const [isParticipantListVisible, setIsParticipantListVisible] = useState(false);
+
+    // Simulation states
+    const [activeSpeakerId, setActiveSpeakerId] = useState(null);
+    const [mockParticipants, setMockParticipants] = useState([]);
 
     const localStreamRef = useRef(null);
     const userIdRef = useRef(`User_${Math.floor(Math.random() * 1000)}`);
 
     useEffect(() => {
         const initMeeting = async () => {
-            const stream = await startLocalStream();
+            const stream = await startLocalStream(initialMic, initialCam);
             if (stream) {
                 SocketService.connect();
                 SocketService.joinRoom(roomID, userIdRef.current);
@@ -45,18 +61,37 @@ export default function MeetingScreen({ route, navigation }) {
 
         initMeeting();
 
+        // Simulation: Add mock participants if alone after 2 seconds
+        const mockTimeout = setTimeout(() => {
+            if (remoteStreams.length === 0) {
+                setMockParticipants([
+                    { id: 'mock1', name: 'Alex Thompson', isMuted: true },
+                    { id: 'mock2', name: 'Sarah Wilson', isMuted: false },
+                ]);
+            }
+        }, 2000);
+
+        // Simulation: Change active speaker every 5 seconds
+        const speakerInterval = setInterval(() => {
+            const pool = ['local', 'mock1', 'mock2', ...remoteStreams.map(s => s.id)];
+            const randomId = pool[Math.floor(Math.random() * pool.length)];
+            setActiveSpeakerId(randomId);
+        }, 5000);
+
         return () => {
             if (localStreamRef.current) {
                 localStreamRef.current.getTracks().forEach(track => track.stop());
             }
             SocketService.disconnect();
             WebRTCService.clearPeers();
+            clearTimeout(mockTimeout);
+            clearInterval(speakerInterval);
         };
     }, []);
 
     const setupSocketListeners = (stream) => {
         SocketService.onUserJoined(async ({ userID, socketId }) => {
-            console.log('User joined:', userID, socketId);
+            setMockParticipants([]); // Remove mocks when real user joins
             await WebRTCService.createPeerConnection(
                 userID,
                 stream,
@@ -85,7 +120,6 @@ export default function MeetingScreen({ route, navigation }) {
         });
 
         SocketService.onUserDisconnected(({ socketId }) => {
-            console.log('User disconnected:', socketId);
             setRemoteStreams(prev => {
                 const userToDisconnect = prev.find(s => s.socketId === socketId);
                 if (userToDisconnect) {
@@ -115,20 +149,20 @@ export default function MeetingScreen({ route, navigation }) {
         SocketService.sendSignal(peerId, { type: 'ice-candidate', candidate });
     };
 
-    const startLocalStream = async () => {
+    const startLocalStream = async (mic, cam) => {
         try {
             const stream = await getMediaDevices().getUserMedia({
-                audio: true,
-                video: {
-                    facingMode: 'user',
-                },
+                audio: mic,
+                video: cam ? { facingMode: 'user' } : false,
             });
             setLocalStream(stream);
             localStreamRef.current = stream;
             return stream;
         } catch (error) {
             console.error('Error getting user media:', error);
-            return null;
+            // Fallback for devices without camera/mic or permissions denied
+            setLocalStream(null);
+            return { getTracks: () => [] };
         }
     };
 
@@ -153,64 +187,65 @@ export default function MeetingScreen({ route, navigation }) {
     };
 
     const handleHangup = () => {
-        navigation.goBack();
+        navigation.navigate('Home');
     };
 
     const handleShareScreen = async () => {
-        try {
-            if (isSharingScreen) {
-                // Stop sharing and revert to camera
-                const stream = await startLocalStream();
-                // Replace tracks in all peer connections
-                Object.values(WebRTCService.peers).forEach(pc => {
-                    const sender = pc.getSenders().find(s => s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
-                });
-                setIsSharingScreen(false);
-            } else {
-                // Start screen share
-                const stream = await getMediaDevices().getDisplayMedia({ video: true });
-                setLocalStream(stream);
-                setIsSharingScreen(true);
-                // Replace tracks in all peer connections
-                Object.values(WebRTCService.peers).forEach(pc => {
-                    const sender = pc.getSenders().find(s => s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
-                });
+        if (Platform.OS === 'web') {
+            try {
+                if (isSharingScreen) {
+                    const stream = await startLocalStream(isMicOn, isCamOn);
+                    Object.values(WebRTCService.peers).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
+                    });
+                    setIsSharingScreen(false);
+                } else {
+                    const stream = await getMediaDevices().getDisplayMedia({ video: true });
+                    setLocalStream(stream);
+                    setIsSharingScreen(true);
+                    Object.values(WebRTCService.peers).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
+                    });
+                }
+            } catch (e) {
+                console.error('Screen share error:', e);
             }
-        } catch (e) {
-            console.error('Screen share error:', e);
+        } else {
+            // Simulation for native screen share
+            setIsSharingScreen(!isSharingScreen);
         }
     };
 
-    const toggleWhiteboard = () => {
-        setIsWhiteboardVisible(!isWhiteboardVisible);
-    };
-
-    const toggleParticipantList = () => {
-        setIsParticipantListVisible(!isParticipantListVisible);
-    };
-
     const renderVideoItem = ({ item }) => (
-        <View style={styles.videoWrapper}>
+        <View style={[
+            styles.videoWrapper,
+            (allStreams.length === 1) && styles.singleVideo,
+            (allStreams.length === 2) && styles.doubleVideo
+        ]}>
             <VideoView
                 stream={item.stream}
                 name={item.name}
                 isLocal={item.isLocal}
                 isMuted={item.isMuted}
+                isActiveSpeaker={activeSpeakerId === item.id}
+                isSharing={item.isSharing}
             />
         </View>
     );
 
     const allStreams = [
-        { id: 'local', stream: localStream, name: 'You', isLocal: true, isMuted: !isMicOn },
-        ...remoteStreams
+        { id: 'local', stream: localStream, name: 'You', isLocal: true, isMuted: !isMicOn, isSharing: isSharingScreen },
+        ...remoteStreams,
+        ...mockParticipants.map(mp => ({ ...mp, stream: null, isLocal: false, isSharing: false }))
     ];
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.roomText}>Meeting: {roomID}</Text>
+                <Text style={styles.roomText}>{roomID}</Text>
+                <Users color={Colors.textSecondary} size={16} />
             </View>
 
             <View style={styles.gridContainer}>
@@ -220,14 +255,19 @@ export default function MeetingScreen({ route, navigation }) {
                     keyExtractor={item => item.id}
                     numColumns={allStreams.length > 2 ? 2 : 1}
                     contentContainerStyle={styles.listContent}
+                    key={allStreams.length > 2 ? 'grid' : 'list'}
                 />
             </View>
 
-            <Whiteboard isVisible={isWhiteboardVisible} roomID={roomID} />
+            <Whiteboard
+                isVisible={isWhiteboardVisible}
+                roomID={roomID}
+                onClose={() => setIsWhiteboardVisible(false)}
+            />
 
             <ParticipantList
                 isVisible={isParticipantListVisible}
-                onClose={toggleParticipantList}
+                onClose={() => setIsParticipantListVisible(false)}
                 participants={allStreams}
             />
 
@@ -239,9 +279,9 @@ export default function MeetingScreen({ route, navigation }) {
                 onHangup={handleHangup}
                 onShareScreen={handleShareScreen}
                 isSharingScreen={isSharingScreen}
-                onToggleWhiteboard={toggleWhiteboard}
+                onToggleWhiteboard={() => setIsWhiteboardVisible(!isWhiteboardVisible)}
                 isWhiteboardVisible={isWhiteboardVisible}
-                onShowParticipants={toggleParticipantList}
+                onShowParticipants={() => setIsParticipantListVisible(!isParticipantListVisible)}
                 participantCount={allStreams.length}
             />
         </SafeAreaView>
@@ -255,7 +295,10 @@ const styles = StyleSheet.create({
     },
     header: {
         padding: Spacing.m,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.s,
     },
     roomText: {
         color: Colors.textSecondary,
@@ -264,15 +307,21 @@ const styles = StyleSheet.create({
     },
     gridContainer: {
         flex: 1,
-        paddingHorizontal: Spacing.s,
     },
     listContent: {
         flexGrow: 1,
-        justifyContent: 'center',
+        padding: Spacing.s,
     },
     videoWrapper: {
         flex: 1,
         aspectRatio: 1,
-        maxWidth: width - Spacing.m * 2,
+        padding: Spacing.xs,
+    },
+    singleVideo: {
+        aspectRatio: 9 / 16,
+        maxHeight: '80%',
+    },
+    doubleVideo: {
+        aspectRatio: 1,
     },
 });

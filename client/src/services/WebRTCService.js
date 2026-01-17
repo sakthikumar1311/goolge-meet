@@ -11,15 +11,21 @@ const peerConfiguration = {
 let PC, SD, IC;
 
 if (Platform.OS === 'web') {
-    PC = window.RTCPeerConnection;
-    SD = window.RTCSessionDescription;
-    IC = window.RTCIceCandidate;
+    if (typeof window !== 'undefined') {
+        PC = window.RTCPeerConnection;
+        SD = window.RTCSessionDescription;
+        IC = window.RTCIceCandidate;
+    }
 } else {
     // Only require native lib on non-web platforms
-    const WebRTC = require('react-native-webrtc');
-    PC = WebRTC.RTCPeerConnection;
-    SD = WebRTC.RTCSessionDescription;
-    IC = WebRTC.RTCIceCandidate;
+    try {
+        const WebRTC = require('react-native-webrtc');
+        PC = WebRTC.RTCPeerConnection;
+        SD = WebRTC.RTCSessionDescription;
+        IC = WebRTC.RTCIceCandidate;
+    } catch (e) {
+        console.warn('WebRTC native module not found');
+    }
 }
 
 class WebRTCService {

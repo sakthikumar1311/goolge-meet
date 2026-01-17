@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import MeetingScreen from '../screens/MeetingScreen';
+import JoinScreen from '../screens/JoinScreen';
 import { Colors } from '../theme/theme';
 
 const Stack = createNativeStackNavigator();
@@ -27,6 +28,11 @@ export default function AppNavigator() {
                     name="Home"
                     component={HomeScreen}
                     options={{ title: 'Google Meet' }}
+                />
+                <Stack.Screen
+                    name="Join"
+                    component={JoinScreen}
+                    options={{ title: 'Join Meeting' }}
                 />
                 <Stack.Screen
                     name="Meeting"
