@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, Edit3, Users, MoreVertical, Hand } from 'lucide-react-native';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, Edit3, Users, MoreVertical, Hand, MessageSquare } from 'lucide-react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
 
 export default function MeetingControls({
@@ -33,40 +33,15 @@ export default function MeetingControls({
                     {isCamOn ? <Video color={Colors.white} size={22} /> : <VideoOff color={Colors.white} size={22} />}
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[styles.button, isSharingScreen && styles.buttonActive]}
-                    onPress={onShareScreen}
-                >
-                    <ScreenShare color={isSharingScreen ? Colors.primary : Colors.white} size={22} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.button, isWhiteboardVisible && styles.buttonActive]}
-                    onPress={onToggleWhiteboard}
-                >
-                    <Edit3 color={isWhiteboardVisible ? Colors.primary : Colors.white} size={22} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={onShowParticipants}
-                >
-                    <View style={styles.participantBadge}>
-                        <Users color={Colors.white} size={22} />
-                        {participantCount > 0 && (
-                            <View style={styles.countBadge}>
-                                <Text style={styles.countText}>{participantCount}</Text>
-                            </View>
-                        )}
-                    </View>
-                </TouchableOpacity>
-
                 <TouchableOpacity style={styles.button}>
                     <Hand color={Colors.white} size={22} />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.button}>
-                    <MoreVertical color={Colors.white} size={22} />
+                <TouchableOpacity
+                    style={[styles.button, (isWhiteboardVisible || isSharingScreen) && styles.buttonActive]}
+                    onPress={onToggleWhiteboard}
+                >
+                    <MoreVertical color={(isWhiteboardVisible || isSharingScreen) ? Colors.googleBlue : Colors.white} size={22} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -83,22 +58,27 @@ export default function MeetingControls({
 const styles = StyleSheet.create({
     container: {
         paddingVertical: Spacing.m,
-        backgroundColor: Colors.background,
+        backgroundColor: 'transparent', // Controls float above the grid in some views, but standard Meet has a dark bar
         paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.m,
     },
     controlsRow: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: Platform.OS === 'web' ? Spacing.m : Spacing.xs,
+        gap: Spacing.s,
     },
     button: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: Colors.surface,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#3C4043', // Specific Google Meet button color
         alignItems: 'center',
         justifyContent: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
     },
     buttonOff: {
         backgroundColor: Colors.error,
@@ -108,28 +88,8 @@ const styles = StyleSheet.create({
     },
     hangupButton: {
         backgroundColor: Colors.error,
-        width: 56,
+        width: 60,
         height: 40,
         borderRadius: 20,
-    },
-    participantBadge: {
-        position: 'relative',
-    },
-    countBadge: {
-        position: 'absolute',
-        top: -5,
-        right: -8,
-        backgroundColor: Colors.primary,
-        borderRadius: 10,
-        minWidth: 16,
-        height: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 2,
-    },
-    countText: {
-        color: Colors.white,
-        fontSize: 10,
-        fontWeight: 'bold',
     },
 });
