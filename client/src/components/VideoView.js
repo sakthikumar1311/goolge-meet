@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, Platform } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
-import { MicOff, Maximize2 } from 'lucide-react-native';
+import { MicOff, Maximize2, Monitor, Layout, Window, MoreHorizontal } from 'lucide-react-native';
 
 // Conditional require for native-only libraries
 let RTCView;
@@ -19,7 +19,33 @@ export default function VideoView({ stream, name, isLocal = false, isMuted = fal
     }, [stream]);
 
     const renderVideo = () => {
-        if (!stream && !isSharing) {
+        if (isSharing) {
+            return (
+                <View style={styles.mockDesktop}>
+                    <View style={styles.desktopHeader}>
+                        <View style={styles.windowControls}>
+                            <View style={[styles.windowDot, { backgroundColor: '#FF5F56' }]} />
+                            <View style={[styles.windowDot, { backgroundColor: '#FFBD2E' }]} />
+                            <View style={[styles.windowDot, { backgroundColor: '#27C93F' }]} />
+                        </View>
+                        <Text style={styles.desktopTitle}>Chrome - Google Meet Presentation</Text>
+                    </View>
+                    <View style={styles.desktopContent}>
+                        <Monitor color="rgba(255,255,255,0.2)" size={80} strokeWidth={1} />
+                        <Text style={styles.desktopPlaceholderText}>Presenting your screen</Text>
+                    </View>
+                    <View style={styles.desktopTaskbar}>
+                        <Layout color="rgba(255,255,255,0.5)" size={16} />
+                        <View style={styles.taskbarDivider} />
+                        <View style={styles.taskbarIcon} />
+                        <View style={styles.taskbarIcon} />
+                        <View style={styles.taskbarIconActive} />
+                    </View>
+                </View>
+            );
+        }
+
+        if (!stream) {
             return (
                 <View style={styles.placeholder}>
                     <View style={styles.avatar}>
@@ -214,5 +240,71 @@ const styles = StyleSheet.create({
         height: 20,
         borderRadius: 10,
         opacity: 0.3,
+    },
+    mockDesktop: {
+        flex: 1,
+        backgroundColor: '#1a1a1b',
+        padding: Spacing.s,
+    },
+    desktopHeader: {
+        height: 30,
+        backgroundColor: '#2d2e30',
+        borderTopLeftRadius: 8,
+        borderTopRightRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.s,
+    },
+    windowControls: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    windowDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    desktopTitle: {
+        color: '#9a9b9d',
+        fontSize: 10,
+        marginLeft: Spacing.m,
+    },
+    desktopContent: {
+        flex: 1,
+        backgroundColor: '#000',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottomLeftRadius: 8,
+        borderBottomRightRadius: 8,
+    },
+    desktopPlaceholderText: {
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 14,
+        marginTop: Spacing.m,
+    },
+    desktopTaskbar: {
+        height: 40,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.m,
+        marginTop: Spacing.s,
+    },
+    taskbarDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    taskbarIcon: {
+        width: 24,
+        height: 24,
+        borderRadius: 4,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    taskbarIconActive: {
+        width: 24,
+        height: 24,
+        borderRadius: 4,
+        backgroundColor: Colors.googleBlue,
     },
 });

@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Share, SafeAreaView, Platform, Dimensions, ScrollView } from 'react-native';
-import { Video, Plus, Keyboard, Copy, Share2, X, Info, Menu, User, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Share, SafeAreaView, Platform, Dimensions, ScrollView, Animated, BlurView } from 'react-native';
+import { Video, Plus, Keyboard, Copy, Share2, X, Info, Menu, User, ChevronLeft, ChevronRight, Settings, HelpCircle } from 'lucide-react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -10,21 +10,57 @@ const CAROUSEL_ITEMS = [
         id: '1',
         title: 'Get a link you can share',
         subtitle: 'Tap New meeting to get a link you can send to people you want to meet with',
-        icon: <Share2 color={Colors.primary} size={48} />,
+        icon: <Share2 color="#8AB4F8" size={48} />,
     },
     {
         id: '2',
         title: 'Your meeting is safe',
         subtitle: 'No one can join a meeting unless invited or admitted by the host',
-        icon: <Video color={Colors.primary} size={48} />,
+        icon: <Video color="#8AB4F8" size={48} />,
     },
     {
         id: '3',
         title: 'See everyone together',
         subtitle: 'To see more people at once, go to Change layout in the More options menu',
-        icon: <Plus color={Colors.primary} size={48} />,
+        icon: <Plus color="#8AB4F8" size={48} />,
     }
 ];
+
+const AnimatedBackground = () => {
+    const anim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(anim, {
+                    toValue: 1,
+                    duration: 10000,
+                    useNativeDriver: false,
+                }),
+                Animated.timing(anim, {
+                    toValue: 0,
+                    duration: 10000,
+                    useNativeDriver: false,
+                }),
+            ])
+        ).start();
+    }, []);
+
+    const backgroundColor = anim.interpolate({
+        inputRange: [0, 0.5, 1],
+        outputRange: ['#202124', '#28292c', '#202124']
+    });
+
+    return (
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor }]} />
+    );
+};
+
+const GlassView = ({ children, style }) => (
+    <View style={[styles.glassEffect, style]}>
+        {children}
+    </View>
+);
 
 export default function HomeScreen({ navigation }) {
     const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
@@ -77,6 +113,8 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
+            <AnimatedBackground />
+
             {/* Top Bar */}
             <View style={styles.topBar}>
                 <TouchableOpacity style={styles.iconButton}>
@@ -191,6 +229,13 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.background,
+    },
+    glassEffect: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        overflow: 'hidden',
     },
     topBar: {
         flexDirection: 'row',

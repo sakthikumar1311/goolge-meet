@@ -11,13 +11,26 @@ const WHITEBOARD_COLORS = [
 const STROKE_WIDTHS = [2, 4, 8, 12, 24];
 
 export default function Whiteboard(props) {
-    const { isVisible, roomID, onClose } = props;
+    const { isVisible, roomID, onClose, syncService } = props;
     const [paths, setPaths] = useState([]);
     const [currentPath, setCurrentPath] = useState('');
     const [activeTool, setActiveTool] = useState('draw'); // draw, erase
     const [strokeColor, setStrokeColor] = useState(WHITEBOARD_COLORS[1]);
     const [strokeWidth, setStrokeWidth] = useState(4);
     const [showSizePicker, setShowSizePicker] = useState(false);
+
+    useEffect(() => {
+        if (syncService && isVisible) {
+            const unsubscribe = syncService.subscribe((type, payload) => {
+                if (type === 'WHITEBOARD_DRAW') {
+                    setPaths(prev => [...prev, payload]);
+                } else if (type === 'WHITEBOARD_CLEAR') {
+                    setPaths([]);
+                }
+            });
+            return unsubscribe;
+        }
+    }, [syncService, isVisible]);
 
     const panResponder = useRef(
         PanResponder.create({
@@ -36,12 +49,21 @@ export default function Whiteboard(props) {
                     };
                     setPaths(prev => [...prev, finishedPath]);
                     setCurrentPath('');
+
+                    if (syncService) {
+                        syncService.broadcast('WHITEBOARD_DRAW', finishedPath);
+                    }
                 }
             },
         })
     ).current;
 
-    const handleClear = () => setPaths([]);
+    const handleClear = () => {
+        setPaths([]);
+        if (syncService) {
+            syncService.broadcast('WHITEBOARD_CLEAR', {});
+        }
+    };
 
     if (!isVisible) return null;
 

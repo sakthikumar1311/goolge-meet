@@ -33,22 +33,34 @@ export default function MeetingControls({
                     {isCamOn ? <Video color={Colors.white} size={22} /> : <VideoOff color={Colors.white} size={22} />}
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.button}>
-                    <Hand color={Colors.white} size={22} />
+                <TouchableOpacity
+                    style={[styles.button, isSharingScreen && styles.buttonActive]}
+                    onPress={onShareScreen}
+                >
+                    <ScreenShare color={isSharingScreen ? Colors.googleBlue : Colors.white} size={22} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.button, (isWhiteboardVisible || isSharingScreen) && styles.buttonActive]}
+                    style={[styles.button, isWhiteboardVisible && styles.buttonActive]}
                     onPress={onToggleWhiteboard}
                 >
-                    <MoreVertical color={(isWhiteboardVisible || isSharingScreen) ? Colors.googleBlue : Colors.white} size={22} />
+                    <Edit3 color={isWhiteboardVisible ? Colors.googleBlue : Colors.white} size={22} />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.button} onPress={onShowParticipants}>
+                    <Users color={Colors.white} size={22} />
+                    {participantCount > 0 && (
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{participantCount}</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     style={[styles.button, styles.hangupButton]}
                     onPress={onHangup}
                 >
-                    <PhoneOff color={Colors.white} size={22} />
+                    <PhoneOff color={Colors.white} size={24} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -58,38 +70,57 @@ export default function MeetingControls({
 const styles = StyleSheet.create({
     container: {
         paddingVertical: Spacing.m,
-        backgroundColor: 'transparent', // Controls float above the grid in some views, but standard Meet has a dark bar
+        backgroundColor: 'rgba(32, 33, 36, 0.95)',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
         paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.m,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
     },
     controlsRow: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'space-evenly',
         alignItems: 'center',
-        gap: Spacing.s,
+        paddingHorizontal: Spacing.s,
     },
     button: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        backgroundColor: '#3C4043', // Specific Google Meet button color
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#3C4043',
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
     },
     buttonOff: {
-        backgroundColor: Colors.error,
+        backgroundColor: '#EA4335',
     },
     buttonActive: {
-        backgroundColor: Colors.white,
+        backgroundColor: '#E8F0FE',
     },
     hangupButton: {
-        backgroundColor: Colors.error,
-        width: 60,
+        backgroundColor: '#EA4335',
+        width: 64,
         height: 40,
         borderRadius: 20,
+    },
+    badge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: Colors.googleBlue,
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#202124',
+    },
+    badgeText: {
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });

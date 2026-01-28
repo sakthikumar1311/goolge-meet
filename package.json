@@ -1,5 +1,14 @@
 {
+  "name": "google-meet-clone",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "npm start --prefix server",
+    "client": "npm start --prefix client",
+    "client:web": "npm run web --prefix client"
+  },
   "devDependencies": {
-    "babel-preset-expo": "^54.0.10"
+    "babel-preset-expo": "^54.0.10",
+    "concurrently": "^8.2.2"
   }
 }

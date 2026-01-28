@@ -6,6 +6,7 @@ import MeetingControls from '../components/MeetingControls';
 import Whiteboard from '../components/Whiteboard';
 import ParticipantList from '../components/ParticipantList';
 import { Users, Camera, Volume2, Info, ChevronLeft, ShieldCheck, MoreVertical } from 'lucide-react-native';
+import SyncService from '../services/SyncService';
 
 // Conditional require for native-only libraries
 let mediaDevices;
@@ -17,7 +18,7 @@ if (Platform.OS !== 'web') {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const MOCK_NAMES = ['Sarah Wilson', 'Alex Thompson', 'Jordan Lee', 'Taylor Smith', 'Morgan Freeman'];
+// Single user experience - no mock participants
 
 export default function MeetingScreen({ route, navigation }) {
     const { roomID, initialMic = true, initialCam = true } = route.params;
@@ -28,11 +29,13 @@ export default function MeetingScreen({ route, navigation }) {
     const [isWhiteboardVisible, setIsWhiteboardVisible] = useState(false);
     const [isParticipantListVisible, setIsParticipantListVisible] = useState(false);
 
-    // Simulation states
-    const [activeSpeakerId, setActiveSpeakerId] = useState('local');
+    // Single user state + Remote peers
     const [participants, setParticipants] = useState([
         { id: 'local', name: 'You', isLocal: true, stream: null, isMuted: !initialMic, isSharing: false }
     ]);
+    const [remotePeers, setRemotePeers] = useState({});
+    const peerID = useRef(Math.random().toString(36).substring(7)).current;
+    const syncService = useRef(null);
 
     const streamRef = useRef(null);
 
@@ -46,40 +49,95 @@ export default function MeetingScreen({ route, navigation }) {
     }, [isCamOn]);
 
     useEffect(() => {
-        // Simulation: Add mock participants one by one
-        const addParticipants = () => {
-            MOCK_NAMES.forEach((name, index) => {
-                setTimeout(() => {
-                    setParticipants(prev => {
-                        if (prev.length >= 6) return prev;
-                        return [...prev, {
-                            id: `mock_${index}`,
-                            name: name,
-                            isLocal: false,
-                            stream: null,
-                            isMuted: Math.random() > 0.5,
-                            isSharing: false
-                        }];
-                    });
-                }, (index + 1) * 3000);
+        if (Platform.OS === 'web') {
+            syncService.current = new SyncService(roomID);
+
+            const unsubscribe = syncService.current.subscribe((type, payload, senderID) => {
+                if (senderID === peerID) return;
+
+                switch (type) {
+                    case 'JOIN':
+                        // Respond with our state
+                        syncService.current.broadcast('PRESENCE', {
+                            isSharing: isSharingScreen,
+                            isMicOn: isMicOn,
+                            name: 'Peer ' + peerID.substring(0, 4)
+                        }, peerID);
+
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                id: senderID,
+                                name: payload.name || 'Remote User',
+                                isLocal: false,
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
+
+                    case 'PRESENCE':
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                id: senderID,
+                                name: payload.name || 'Remote User',
+                                isLocal: false,
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
+
+                    case 'STATE_UPDATE':
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                ...prev[senderID],
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
+
+                    case 'LEAVE':
+                        setRemotePeers(prev => {
+                            const next = { ...prev };
+                            delete next[senderID];
+                            return next;
+                        });
+                        break;
+                }
             });
-        };
 
-        addParticipants();
+            // Announce presence
+            syncService.current.broadcast('JOIN', {
+                isSharing: isSharingScreen,
+                isMicOn: isMicOn,
+                name: 'Peer ' + peerID.substring(0, 4)
+            }, peerID);
 
-        // Simulation: Change active speaker
-        const speakerInterval = setInterval(() => {
-            setParticipants(prev => {
-                const randomIdx = Math.floor(Math.random() * prev.length);
-                setActiveSpeakerId(prev[randomIdx].id);
-                return prev;
-            });
-        }, 4000);
+            return () => {
+                syncService.current.broadcast('LEAVE', {}, peerID);
+                unsubscribe();
+                syncService.current.cleanup();
+            };
+        }
+    }, [roomID]);
 
-        return () => {
-            clearInterval(speakerInterval);
-        };
-    }, []);
+    useEffect(() => {
+        if (syncService.current) {
+            syncService.current.broadcast('STATE_UPDATE', {
+                isSharing: isSharingScreen,
+                isMicOn: isMicOn
+            }, peerID);
+        }
+    }, [isSharingScreen, isMicOn]);
+
+    const allParticipants = [
+        ...participants,
+        ...Object.values(remotePeers)
+    ];
 
     const startLocalStream = async () => {
         try {
@@ -126,22 +184,14 @@ export default function MeetingScreen({ route, navigation }) {
     const handleShareScreen = () => setIsSharingScreen(!isSharingScreen);
 
     const renderParticipant = ({ item }) => {
-        const count = participants.length;
-        let itemStyle = styles.videoWrapper;
-
-        if (count === 1) itemStyle = styles.singleVideo;
-        else if (count === 2) itemStyle = styles.doubleVideo;
-        else if (count <= 4) itemStyle = styles.quadVideo;
-        else itemStyle = styles.sixVideo;
-
         return (
-            <View style={itemStyle}>
+            <View style={styles.singleVideo}>
                 <VideoView
                     stream={item.isLocal ? localStream : null}
                     name={item.name}
                     isLocal={item.isLocal}
                     isMuted={item.isLocal ? !isMicOn : item.isMuted}
-                    isActiveSpeaker={activeSpeakerId === item.id}
+                    isActiveSpeaker={true} // Local user is always prominent
                     isSharing={item.id === 'local' ? isSharingScreen : item.isSharing}
                 />
             </View>
@@ -178,14 +228,16 @@ export default function MeetingScreen({ route, navigation }) {
             {/* Video Grid */}
             <View style={styles.gridContainer}>
                 <FlatList
-                    data={participants}
+                    data={allParticipants}
                     renderItem={renderParticipant}
                     keyExtractor={item => item.id}
-                    numColumns={getColumns()}
-                    key={getColumns()} // Re-render on column change
+                    numColumns={allParticipants.length > 2 ? 2 : 1}
+                    key={allParticipants.length > 2 ? '2' : '1'}
                     contentContainerStyle={styles.listContent}
                 />
             </View>
+
+            <View style={{ height: 100 }} />
 
             {/* Bottom Controls */}
             <MeetingControls
@@ -206,6 +258,7 @@ export default function MeetingScreen({ route, navigation }) {
                 isVisible={isWhiteboardVisible}
                 roomID={roomID}
                 onClose={() => setIsWhiteboardVisible(false)}
+                syncService={syncService.current}
             />
 
             <ParticipantList
