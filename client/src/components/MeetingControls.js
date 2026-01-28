@@ -40,6 +40,7 @@ export default function MeetingControls({
                     <ScreenShare color={isSharingScreen ? Colors.googleBlue : Colors.white} size={22} />
                 </TouchableOpacity>
 
+
                 <TouchableOpacity
                     style={[styles.button, isWhiteboardVisible && styles.buttonActive]}
                     onPress={onToggleWhiteboard}
