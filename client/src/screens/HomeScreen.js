@@ -1,11 +1,72 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Share, SafeAreaView, Platform } from 'react-native';
-import { Video, Plus, Keyboard, Copy, Share2, X, Info } from 'lucide-react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Share, SafeAreaView, Platform, Dimensions, ScrollView, Animated, BlurView } from 'react-native';
+import { Video, Plus, Keyboard, Copy, Share2, X, Info, Menu, User, ChevronLeft, ChevronRight, Settings, HelpCircle } from 'lucide-react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const CAROUSEL_ITEMS = [
+    {
+        id: '1',
+        title: 'Get a link you can share',
+        subtitle: 'Tap New meeting to get a link you can send to people you want to meet with',
+        icon: <Share2 color="#8AB4F8" size={48} />,
+    },
+    {
+        id: '2',
+        title: 'Your meeting is safe',
+        subtitle: 'No one can join a meeting unless invited or admitted by the host',
+        icon: <Video color="#8AB4F8" size={48} />,
+    },
+    {
+        id: '3',
+        title: 'See everyone together',
+        subtitle: 'To see more people at once, go to Change layout in the More options menu',
+        icon: <Plus color="#8AB4F8" size={48} />,
+    }
+];
+
+const AnimatedBackground = () => {
+    const anim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(anim, {
+                    toValue: 1,
+                    duration: 10000,
+                    useNativeDriver: false,
+                }),
+                Animated.timing(anim, {
+                    toValue: 0,
+                    duration: 10000,
+                    useNativeDriver: false,
+                }),
+            ])
+        ).start();
+    }, []);
+
+    const backgroundColor = anim.interpolate({
+        inputRange: [0, 0.5, 1],
+        outputRange: ['#202124', '#28292c', '#202124']
+    });
+
+    return (
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor }]} />
+    );
+};
+
+const GlassView = ({ children, style }) => (
+    <View style={[styles.glassEffect, style]}>
+        {children}
+    </View>
+);
 
 export default function HomeScreen({ navigation }) {
     const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
     const [generatedId, setGeneratedId] = useState('');
+    const [activeIndex, setActiveIndex] = useState(0);
+    const scrollRef = useRef(null);
 
     const handleCreateMeeting = () => {
         const newId = Math.random().toString(36).substring(2, 5) + '-' +
@@ -43,21 +104,72 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
+    const onScroll = (event) => {
+        const slide = Math.ceil(event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width);
+        if (slide !== activeIndex) {
+            setActiveIndex(slide);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
+            <AnimatedBackground />
+
+            {/* Top Bar */}
+            <View style={styles.topBar}>
+                <TouchableOpacity style={styles.iconButton}>
+                    <Menu color={Colors.text} size={24} />
+                </TouchableOpacity>
+                <Text style={styles.topBarTitle}>Meet</Text>
+                <TouchableOpacity style={styles.profileButton}>
+                    <View style={styles.profileAvatar}>
+                        <User color={Colors.white} size={20} />
+                    </View>
+                </TouchableOpacity>
+            </View>
+
             <View style={styles.content}>
-                <View style={styles.header}>
-                    <Video color={Colors.primary} size={64} />
-                    <Text style={styles.title}>Google Meet</Text>
-                    <Text style={styles.subtitle}>Premium video meetings. Now free for everyone.</Text>
+                {/* Carousel Section */}
+                <View style={styles.carouselContainer}>
+                    <ScrollView
+                        ref={scrollRef}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
+                    >
+                        {CAROUSEL_ITEMS.map((item) => (
+                            <View key={item.id} style={styles.carouselItem}>
+                                <View style={styles.iconCircle}>
+                                    {item.icon}
+                                </View>
+                                <Text style={styles.carouselTitle}>{item.title}</Text>
+                                <Text style={styles.carouselSubtitle}>{item.subtitle}</Text>
+                            </View>
+                        ))}
+                    </ScrollView>
+
+                    {/* Pagination Dots */}
+                    <View style={styles.pagination}>
+                        {CAROUSEL_ITEMS.map((_, index) => (
+                            <View
+                                key={index}
+                                style={[
+                                    styles.dot,
+                                    activeIndex === index && styles.activeDot
+                                ]}
+                            />
+                        ))}
+                    </View>
                 </View>
 
+                {/* Bottom Actions */}
                 <View style={styles.actionContainer}>
                     <TouchableOpacity
                         style={styles.primaryButton}
                         onPress={handleCreateMeeting}
                     >
-                        <Plus color={Colors.white} size={24} />
                         <Text style={styles.buttonText}>New meeting</Text>
                     </TouchableOpacity>
 
@@ -65,16 +177,8 @@ export default function HomeScreen({ navigation }) {
                         style={styles.secondaryButton}
                         onPress={() => navigation.navigate('Join')}
                     >
-                        <Keyboard color={Colors.primary} size={24} />
                         <Text style={styles.secondaryButtonText}>Join with a code</Text>
                     </TouchableOpacity>
-                </View>
-
-                <View style={styles.infoSection}>
-                    <View style={styles.infoCard}>
-                        <Info color={Colors.primary} size={24} />
-                        <Text style={styles.infoText}>Learn more about Google Meet</Text>
-                    </View>
                 </View>
             </View>
 
@@ -99,7 +203,7 @@ export default function HomeScreen({ navigation }) {
                         </Text>
 
                         <View style={styles.linkContainer}>
-                            <Text style={styles.linkText}>{generatedId}</Text>
+                            <Text style={styles.linkText}>{`meet.google.com/${generatedId}`}</Text>
                             <TouchableOpacity onPress={handleCopyLink}>
                                 <Copy color={Colors.primary} size={20} />
                             </TouchableOpacity>
@@ -126,73 +230,125 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
+    glassEffect: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        overflow: 'hidden',
+    },
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.m,
+        height: 56,
+    },
+    topBarTitle: {
+        ...Typography.h1,
+        fontSize: 20,
+    },
+    iconButton: {
+        padding: Spacing.s,
+    },
+    profileButton: {
+        padding: Spacing.s,
+    },
+    profileAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#7B1FA2', // Purple avatar like Google defaults
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     content: {
         flex: 1,
-        padding: Spacing.l,
+        justifyContent: 'space-between',
+        paddingBottom: Spacing.xxl,
+    },
+    carouselContainer: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    header: {
+    carouselItem: {
+        width: SCREEN_WIDTH,
         alignItems: 'center',
-        marginBottom: Spacing.xxxl,
+        paddingHorizontal: Spacing.xxl,
+        justifyContent: 'center',
     },
-    title: {
-        ...Typography.h1,
-        marginTop: Spacing.m,
+    iconCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: Colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.xl,
     },
-    subtitle: {
+    carouselTitle: {
+        ...Typography.h2,
+        textAlign: 'center',
+        marginBottom: Spacing.s,
+    },
+    carouselSubtitle: {
         ...Typography.body,
         textAlign: 'center',
         color: Colors.textSecondary,
-        marginTop: Spacing.s,
-        paddingHorizontal: Spacing.l,
+        paddingHorizontal: Spacing.m,
+    },
+    pagination: {
+        flexDirection: 'row',
+        position: 'absolute',
+        bottom: 20,
+    },
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.secondary,
+        marginHorizontal: 4,
+    },
+    activeDot: {
+        backgroundColor: Colors.primary,
+        width: 18, // Stretched active dot
     },
     actionContainer: {
-        width: '100%',
+        paddingHorizontal: Spacing.l,
         gap: Spacing.m,
+        alignItems: 'center',
     },
     primaryButton: {
-        backgroundColor: Colors.primary,
-        flexDirection: 'row',
+        backgroundColor: Colors.googleBlue,
+        width: '100%',
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: Spacing.m,
-        borderRadius: 25,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
     },
     buttonText: {
         ...Typography.button,
-        marginLeft: Spacing.s,
+        color: Colors.white,
     },
     secondaryButton: {
         backgroundColor: 'transparent',
-        flexDirection: 'row',
+        width: '100%',
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: Spacing.m,
-        borderRadius: 25,
         borderWidth: 1,
         borderColor: Colors.border,
     },
     secondaryButtonText: {
         ...Typography.button,
         color: Colors.primary,
-        marginLeft: Spacing.s,
-    },
-    infoSection: {
-        marginTop: Spacing.xxl,
-        width: '100%',
-    },
-    infoCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        padding: Spacing.m,
-        borderRadius: 12,
-    },
-    infoText: {
-        ...Typography.bodySmall,
-        color: Colors.accent,
-        marginLeft: Spacing.m,
     },
     modalOverlay: {
         flex: 1,
@@ -201,8 +357,8 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         backgroundColor: Colors.background,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
         padding: Spacing.l,
         paddingBottom: Platform.OS === 'ios' ? Spacing.xxl : Spacing.l,
     },
@@ -215,11 +371,13 @@ const styles = StyleSheet.create({
     modalTitle: {
         ...Typography.h2,
         flex: 1,
+        fontSize: 20,
     },
     modalSubtitle: {
         ...Typography.bodySmall,
         color: Colors.textSecondary,
         marginBottom: Spacing.l,
+        lineHeight: 18,
     },
     linkContainer: {
         flexDirection: 'row',
@@ -233,6 +391,7 @@ const styles = StyleSheet.create({
     linkText: {
         ...Typography.body,
         color: Colors.text,
+        letterSpacing: 0.5,
     },
     shareOption: {
         flexDirection: 'row',
@@ -245,12 +404,12 @@ const styles = StyleSheet.create({
         marginLeft: Spacing.m,
     },
     startNowButton: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.googleBlue,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: Spacing.m,
-        borderRadius: 25,
+        height: 48,
+        borderRadius: 24,
     },
     startNowText: {
         ...Typography.button,

@@ -1,22 +1,25 @@
+import { Platform } from 'react-native';
+
 export const Colors = {
-  primary: '#1A73E8', // Google Blue
+  primary: '#8AB4F8', // Google Blue (Dark Theme)
   secondary: '#5F6368', // Gray
   background: '#202124', // Dark Background
   surface: '#3C4043', // Surface Gray
-  error: '#EA4335', // Red
-  success: '#34A853', // Green
-  warning: '#FBBC04', // Yellow
+  error: '#F28B82', // Light Red (Dark Theme)
+  success: '#81C995', // Light Green (Dark Theme)
+  warning: '#FDD663', // Light Yellow (Dark Theme)
   text: '#E8EAED', // Light Text
   textSecondary: '#BDC1C6', // Muted Text
   border: '#5F6368',
   white: '#FFFFFF',
   black: '#000000',
-  accent: '#8AB4F8', // Lighter Blue
-  divider: '#5F6368',
+  accent: '#D2E3FC', // Very Light Blue
+  divider: '#3C4043',
   iconActive: '#FFFFFF',
   iconInactive: '#BDC1C6',
   overlay: 'rgba(0, 0, 0, 0.6)',
   whiteboardBg: '#FFFFFF',
+  googleBlue: '#1A73E8', // Brand Blue (used in buttons often)
 };
 
 export const Spacing = {
@@ -31,35 +34,36 @@ export const Spacing = {
 
 export const Typography = {
   h1: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '400',
     color: Colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   h2: {
-    fontSize: 22,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '500',
     color: Colors.text,
   },
   h3: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: Colors.text,
   },
   body: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-  bodySmall: {
     fontSize: 14,
     color: Colors.text,
   },
-  caption: {
+  bodySmall: {
     fontSize: 12,
     color: Colors.textSecondary,
   },
+  caption: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+  },
   button: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: Colors.white,
   },
 };

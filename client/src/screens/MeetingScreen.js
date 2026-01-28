@@ -1,276 +1,253 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, SafeAreaView, FlatList, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Text, SafeAreaView, FlatList, Dimensions, Platform, TouchableOpacity } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
 import VideoView from '../components/VideoView';
 import MeetingControls from '../components/MeetingControls';
 import Whiteboard from '../components/Whiteboard';
 import ParticipantList from '../components/ParticipantList';
-import { Users } from 'lucide-react-native';
-import SocketService from '../services/SocketService';
-import WebRTCService from '../services/WebRTCService';
-
-// Safe dimension access for web
-const getScreenWidth = () => {
-    try {
-        return Dimensions.get('window').width;
-    } catch (e) {
-        return 400; // Fallback
-    }
-};
-const SCREEN_WIDTH = getScreenWidth();
+import { Users, Camera, Volume2, Info, ChevronLeft, ShieldCheck, MoreVertical } from 'lucide-react-native';
+import SyncService from '../services/SyncService';
 
 // Conditional require for native-only libraries
-let nativeMediaDevices;
+let mediaDevices;
 if (Platform.OS !== 'web') {
-    nativeMediaDevices = require('react-native-webrtc').mediaDevices;
+    mediaDevices = require('react-native-webrtc').mediaDevices;
+} else {
+    mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
 }
 
-const getMediaDevices = () => {
-    if (Platform.OS === 'web') {
-        return (typeof navigator !== 'undefined' && navigator.mediaDevices) ? navigator.mediaDevices : null;
-    }
-    return nativeMediaDevices;
-};
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// Single user experience - no mock participants
 
 export default function MeetingScreen({ route, navigation }) {
     const { roomID, initialMic = true, initialCam = true } = route.params;
     const [localStream, setLocalStream] = useState(null);
-    const [remoteStreams, setRemoteStreams] = useState([]);
     const [isMicOn, setIsMicOn] = useState(initialMic);
     const [isCamOn, setIsCamOn] = useState(initialCam);
     const [isSharingScreen, setIsSharingScreen] = useState(false);
     const [isWhiteboardVisible, setIsWhiteboardVisible] = useState(false);
     const [isParticipantListVisible, setIsParticipantListVisible] = useState(false);
 
-    // Simulation states
-    const [activeSpeakerId, setActiveSpeakerId] = useState(null);
-    const [mockParticipants, setMockParticipants] = useState([]);
+    // Single user state + Remote peers
+    const [participants, setParticipants] = useState([
+        { id: 'local', name: 'You', isLocal: true, stream: null, isMuted: !initialMic, isSharing: false }
+    ]);
+    const [remotePeers, setRemotePeers] = useState({});
+    const peerID = useRef(Math.random().toString(36).substring(7)).current;
+    const syncService = useRef(null);
 
-    const localStreamRef = useRef(null);
-    const userIdRef = useRef(`User_${Math.floor(Math.random() * 1000)}`);
+    const streamRef = useRef(null);
 
     useEffect(() => {
-        const initMeeting = async () => {
-            const stream = await startLocalStream(initialMic, initialCam);
-            if (stream) {
-                SocketService.connect();
-                SocketService.joinRoom(roomID, userIdRef.current);
-                setupSocketListeners(stream);
-            }
-        };
+        if (isCamOn) {
+            startLocalStream();
+        } else {
+            stopLocalStream();
+        }
+        return () => stopLocalStream();
+    }, [isCamOn]);
 
-        initMeeting();
+    useEffect(() => {
+        if (Platform.OS === 'web') {
+            syncService.current = new SyncService(roomID);
 
-        // Simulation: Add mock participants if alone after 2 seconds
-        const mockTimeout = setTimeout(() => {
-            if (remoteStreams.length === 0) {
-                setMockParticipants([
-                    { id: 'mock1', name: 'Alex Thompson', isMuted: true },
-                    { id: 'mock2', name: 'Sarah Wilson', isMuted: false },
-                ]);
-            }
-        }, 2000);
+            const unsubscribe = syncService.current.subscribe((type, payload, senderID) => {
+                if (senderID === peerID) return;
 
-        // Simulation: Change active speaker every 5 seconds
-        const speakerInterval = setInterval(() => {
-            const pool = ['local', 'mock1', 'mock2', ...remoteStreams.map(s => s.id)];
-            const randomId = pool[Math.floor(Math.random() * pool.length)];
-            setActiveSpeakerId(randomId);
-        }, 5000);
+                switch (type) {
+                    case 'JOIN':
+                        // Respond with our state
+                        syncService.current.broadcast('PRESENCE', {
+                            isSharing: isSharingScreen,
+                            isMicOn: isMicOn,
+                            name: 'Peer ' + peerID.substring(0, 4)
+                        }, peerID);
 
-        return () => {
-            if (localStreamRef.current) {
-                localStreamRef.current.getTracks().forEach(track => track.stop());
-            }
-            SocketService.disconnect();
-            WebRTCService.clearPeers();
-            clearTimeout(mockTimeout);
-            clearInterval(speakerInterval);
-        };
-    }, []);
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                id: senderID,
+                                name: payload.name || 'Remote User',
+                                isLocal: false,
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
 
-    const setupSocketListeners = (stream) => {
-        SocketService.onUserJoined(async ({ userID, socketId }) => {
-            setMockParticipants([]); // Remove mocks when real user joins
-            await WebRTCService.createPeerConnection(
-                userID,
-                stream,
-                (peerId, remoteStream) => handleRemoteStream(peerId, remoteStream, socketId),
-                handleIceCandidate
-            );
-            const createdOffer = await WebRTCService.createOffer(userID);
-            SocketService.sendSignal(userID, { type: 'offer', offer: createdOffer });
-        });
+                    case 'PRESENCE':
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                id: senderID,
+                                name: payload.name || 'Remote User',
+                                isLocal: false,
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
 
-        SocketService.onSignalReceived(async ({ from, signal }) => {
-            if (signal.type === 'offer') {
-                await WebRTCService.createPeerConnection(
-                    from,
-                    stream,
-                    (peerId, remoteStream) => handleRemoteStream(peerId, remoteStream),
-                    handleIceCandidate
-                );
-                const answer = await WebRTCService.handleOffer(from, signal.offer);
-                SocketService.sendSignal(from, { type: 'answer', answer });
-            } else if (signal.type === 'answer') {
-                await WebRTCService.handleAnswer(from, signal.answer);
-            } else if (signal.type === 'ice-candidate') {
-                await WebRTCService.handleIceCandidate(from, signal.candidate);
-            }
-        });
+                    case 'STATE_UPDATE':
+                        setRemotePeers(prev => ({
+                            ...prev,
+                            [senderID]: {
+                                ...prev[senderID],
+                                isSharing: payload.isSharing,
+                                isMuted: !payload.isMicOn
+                            }
+                        }));
+                        break;
 
-        SocketService.onUserDisconnected(({ socketId }) => {
-            setRemoteStreams(prev => {
-                const userToDisconnect = prev.find(s => s.socketId === socketId);
-                if (userToDisconnect) {
-                    WebRTCService.removePeer(userToDisconnect.id);
+                    case 'LEAVE':
+                        setRemotePeers(prev => {
+                            const next = { ...prev };
+                            delete next[senderID];
+                            return next;
+                        });
+                        break;
                 }
-                return prev.filter(s => s.socketId !== socketId);
             });
-        });
-    };
 
-    const handleRemoteStream = (peerId, stream, socketId) => {
-        setRemoteStreams(prev => {
-            const exists = prev.find(s => s.id === peerId);
-            if (exists) return prev;
-            return [...prev, {
-                id: peerId,
-                socketId: socketId,
-                stream,
-                name: peerId,
-                isLocal: false,
-                isMuted: false
-            }];
-        });
-    };
+            // Announce presence
+            syncService.current.broadcast('JOIN', {
+                isSharing: isSharingScreen,
+                isMicOn: isMicOn,
+                name: 'Peer ' + peerID.substring(0, 4)
+            }, peerID);
 
-    const handleIceCandidate = (peerId, candidate) => {
-        SocketService.sendSignal(peerId, { type: 'ice-candidate', candidate });
-    };
+            return () => {
+                syncService.current.broadcast('LEAVE', {}, peerID);
+                unsubscribe();
+                syncService.current.cleanup();
+            };
+        }
+    }, [roomID]);
 
-    const startLocalStream = async (mic, cam) => {
+    useEffect(() => {
+        if (syncService.current) {
+            syncService.current.broadcast('STATE_UPDATE', {
+                isSharing: isSharingScreen,
+                isMicOn: isMicOn
+            }, peerID);
+        }
+    }, [isSharingScreen, isMicOn]);
+
+    const allParticipants = [
+        ...participants,
+        ...Object.values(remotePeers)
+    ];
+
+    const startLocalStream = async () => {
         try {
-            const stream = await getMediaDevices().getUserMedia({
-                audio: mic,
-                video: cam ? { facingMode: 'user' } : false,
+            if (streamRef.current) stopLocalStream();
+
+            const stream = await mediaDevices.getUserMedia({
+                audio: true,
+                video: { facingMode: 'user' }
             });
+
             setLocalStream(stream);
-            localStreamRef.current = stream;
-            return stream;
+            streamRef.current = stream;
         } catch (error) {
-            console.error('Error getting user media:', error);
-            // Fallback for devices without camera/mic or permissions denied
+            console.error('Error starting local stream:', error);
+            setIsCamOn(false);
+        }
+    };
+
+    const stopLocalStream = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
             setLocalStream(null);
-            return { getTracks: () => [] };
         }
     };
 
     const toggleMic = () => {
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
+        if (streamRef.current) {
+            const audioTrack = streamRef.current.getAudioTracks()[0];
             if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                setIsMicOn(audioTrack.enabled);
+                audioTrack.enabled = !isMicOn;
             }
         }
+        setIsMicOn(!isMicOn);
     };
 
-    const toggleCam = () => {
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.enabled = !videoTrack.enabled;
-                setIsCamOn(videoTrack.enabled);
-            }
-        }
-    };
+    const toggleCam = () => setIsCamOn(!isCamOn);
 
     const handleHangup = () => {
+        stopLocalStream();
         navigation.navigate('Home');
     };
 
-    const handleShareScreen = async () => {
-        if (Platform.OS === 'web') {
-            try {
-                if (isSharingScreen) {
-                    const stream = await startLocalStream(isMicOn, isCamOn);
-                    Object.values(WebRTCService.peers).forEach(pc => {
-                        const sender = pc.getSenders().find(s => s.track.kind === 'video');
-                        if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
-                    });
-                    setIsSharingScreen(false);
-                } else {
-                    const stream = await getMediaDevices().getDisplayMedia({ video: true });
-                    setLocalStream(stream);
-                    setIsSharingScreen(true);
-                    Object.values(WebRTCService.peers).forEach(pc => {
-                        const sender = pc.getSenders().find(s => s.track.kind === 'video');
-                        if (sender) sender.replaceTrack(stream.getVideoTracks()[0]);
-                    });
-                }
-            } catch (e) {
-                console.error('Screen share error:', e);
-            }
-        } else {
-            // Simulation for native screen share
-            setIsSharingScreen(!isSharingScreen);
-        }
+    const handleShareScreen = () => setIsSharingScreen(!isSharingScreen);
+
+    const renderParticipant = ({ item }) => {
+        const count = allParticipants.length;
+        let itemStyle = styles.videoWrapper;
+
+        if (count === 1) itemStyle = styles.singleVideo;
+        else if (count === 2) itemStyle = styles.doubleVideo;
+        else if (count <= 4) itemStyle = styles.quadVideo;
+        else itemStyle = styles.sixVideo;
+
+        return (
+            <View style={itemStyle}>
+                <VideoView
+                    stream={item.isLocal ? localStream : null}
+                    name={item.name}
+                    isLocal={item.isLocal}
+                    isMuted={item.isLocal ? !isMicOn : item.isMuted}
+                    isActiveSpeaker={false} // Simple placeholder for now
+                    isSharing={item.id === 'local' ? isSharingScreen : item.isSharing}
+                />
+            </View>
+        );
     };
 
-    const renderVideoItem = ({ item }) => (
-        <View style={[
-            styles.videoWrapper,
-            (allStreams.length === 1) && styles.singleVideo,
-            (allStreams.length === 2) && styles.doubleVideo
-        ]}>
-            <VideoView
-                stream={item.stream}
-                name={item.name}
-                isLocal={item.isLocal}
-                isMuted={item.isMuted}
-                isActiveSpeaker={activeSpeakerId === item.id}
-                isSharing={item.isSharing}
-            />
-        </View>
-    );
-
-    const allStreams = [
-        { id: 'local', stream: localStream, name: 'You', isLocal: true, isMuted: !isMicOn, isSharing: isSharingScreen },
-        ...remoteStreams,
-        ...mockParticipants.map(mp => ({ ...mp, stream: null, isLocal: false, isSharing: false }))
-    ];
+    const getColumns = () => {
+        const count = participants.length;
+        if (count <= 2) return 1;
+        return 2;
+    };
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.roomText}>{roomID}</Text>
-                <Users color={Colors.textSecondary} size={16} />
+            {/* Top Bar */}
+            <View style={styles.topBar}>
+                <View style={styles.topBarLeft}>
+                    <Text style={styles.roomIDText}>{roomID}</Text>
+                    <ChevronLeft color={Colors.text} size={20} style={{ marginLeft: -4 }} />
+                </View>
+                <View style={styles.topBarRight}>
+                    <TouchableOpacity style={styles.topIcon}>
+                        <Camera color={Colors.text} size={22} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.topIcon}>
+                        <Volume2 color={Colors.text} size={22} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.topIcon}>
+                        <ShieldCheck color={Colors.text} size={22} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
+            {/* Video Grid */}
             <View style={styles.gridContainer}>
                 <FlatList
-                    data={allStreams}
-                    renderItem={renderVideoItem}
+                    data={allParticipants}
+                    renderItem={renderParticipant}
                     keyExtractor={item => item.id}
-                    numColumns={allStreams.length > 2 ? 2 : 1}
+                    numColumns={allParticipants.length > 2 ? 2 : 1}
+                    key={allParticipants.length > 2 ? '2' : '1'}
                     contentContainerStyle={styles.listContent}
-                    key={allStreams.length > 2 ? 'grid' : 'list'}
                 />
             </View>
 
-            <Whiteboard
-                isVisible={isWhiteboardVisible}
-                roomID={roomID}
-                onClose={() => setIsWhiteboardVisible(false)}
-            />
+            <View style={{ height: 100 }} />
 
-            <ParticipantList
-                isVisible={isParticipantListVisible}
-                onClose={() => setIsParticipantListVisible(false)}
-                participants={allStreams}
-            />
-
+            {/* Bottom Controls */}
             <MeetingControls
                 isMicOn={isMicOn}
                 isCamOn={isCamOn}
@@ -282,7 +259,20 @@ export default function MeetingScreen({ route, navigation }) {
                 onToggleWhiteboard={() => setIsWhiteboardVisible(!isWhiteboardVisible)}
                 isWhiteboardVisible={isWhiteboardVisible}
                 onShowParticipants={() => setIsParticipantListVisible(!isParticipantListVisible)}
-                participantCount={allStreams.length}
+                participantCount={participants.length}
+            />
+
+            <Whiteboard
+                isVisible={isWhiteboardVisible}
+                roomID={roomID}
+                onClose={() => setIsWhiteboardVisible(false)}
+                syncService={syncService.current}
+            />
+
+            <ParticipantList
+                isVisible={isParticipantListVisible}
+                onClose={() => setIsParticipantListVisible(false)}
+                participants={participants}
             />
         </SafeAreaView>
     );
@@ -293,35 +283,59 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
-    header: {
-        padding: Spacing.m,
+    topBar: {
+        height: 56,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: Spacing.s,
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.m,
     },
-    roomText: {
-        color: Colors.textSecondary,
-        fontSize: 14,
-        fontWeight: '600',
+    topBarLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    roomIDText: {
+        ...Typography.h3,
+        color: Colors.text,
+        marginRight: Spacing.xs,
+    },
+    topBarRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    topIcon: {
+        padding: Spacing.s,
+        marginLeft: Spacing.s,
     },
     gridContainer: {
         flex: 1,
     },
     listContent: {
         flexGrow: 1,
-        padding: Spacing.s,
+        padding: Spacing.xs,
     },
     videoWrapper: {
         flex: 1,
         aspectRatio: 1,
-        padding: Spacing.xs,
     },
     singleVideo: {
-        aspectRatio: 9 / 16,
-        maxHeight: '80%',
+        width: '100%',
+        aspectRatio: 0.7,
+        padding: Spacing.xs,
     },
     doubleVideo: {
+        width: '100%',
+        height: SCREEN_WIDTH * 0.75,
+        padding: Spacing.xs,
+    },
+    quadVideo: {
+        width: '50%',
+        aspectRatio: 0.8,
+        padding: Spacing.xs,
+    },
+    sixVideo: {
+        width: '50%',
         aspectRatio: 1,
+        padding: Spacing.xs,
     },
 });

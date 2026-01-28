@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, Edit3, Users, MoreVertical, Hand } from 'lucide-react-native';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, Edit3, Users, MoreVertical, Hand, MessageSquare } from 'lucide-react-native';
 import { Colors, Spacing, Typography } from '../theme/theme';
 
 export default function MeetingControls({
@@ -37,43 +37,31 @@ export default function MeetingControls({
                     style={[styles.button, isSharingScreen && styles.buttonActive]}
                     onPress={onShareScreen}
                 >
-                    <ScreenShare color={isSharingScreen ? Colors.primary : Colors.white} size={22} />
+                    <ScreenShare color={isSharingScreen ? Colors.googleBlue : Colors.white} size={22} />
                 </TouchableOpacity>
+
 
                 <TouchableOpacity
                     style={[styles.button, isWhiteboardVisible && styles.buttonActive]}
                     onPress={onToggleWhiteboard}
                 >
-                    <Edit3 color={isWhiteboardVisible ? Colors.primary : Colors.white} size={22} />
+                    <Edit3 color={isWhiteboardVisible ? Colors.googleBlue : Colors.white} size={22} />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={onShowParticipants}
-                >
-                    <View style={styles.participantBadge}>
-                        <Users color={Colors.white} size={22} />
-                        {participantCount > 0 && (
-                            <View style={styles.countBadge}>
-                                <Text style={styles.countText}>{participantCount}</Text>
-                            </View>
-                        )}
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.button}>
-                    <Hand color={Colors.white} size={22} />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.button}>
-                    <MoreVertical color={Colors.white} size={22} />
+                <TouchableOpacity style={styles.button} onPress={onShowParticipants}>
+                    <Users color={Colors.white} size={22} />
+                    {participantCount > 0 && (
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{participantCount}</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     style={[styles.button, styles.hangupButton]}
                     onPress={onHangup}
                 >
-                    <PhoneOff color={Colors.white} size={22} />
+                    <PhoneOff color={Colors.white} size={24} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -83,51 +71,55 @@ export default function MeetingControls({
 const styles = StyleSheet.create({
     container: {
         paddingVertical: Spacing.m,
-        backgroundColor: Colors.background,
+        backgroundColor: 'rgba(32, 33, 36, 0.95)',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
         paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.m,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
     },
     controlsRow: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'space-evenly',
         alignItems: 'center',
-        gap: Platform.OS === 'web' ? Spacing.m : Spacing.xs,
+        paddingHorizontal: Spacing.s,
     },
     button: {
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: Colors.surface,
+        backgroundColor: '#3C4043',
         alignItems: 'center',
         justifyContent: 'center',
     },
     buttonOff: {
-        backgroundColor: Colors.error,
+        backgroundColor: '#EA4335',
     },
     buttonActive: {
-        backgroundColor: Colors.white,
+        backgroundColor: '#E8F0FE',
     },
     hangupButton: {
-        backgroundColor: Colors.error,
-        width: 56,
+        backgroundColor: '#EA4335',
+        width: 64,
         height: 40,
         borderRadius: 20,
     },
-    participantBadge: {
-        position: 'relative',
-    },
-    countBadge: {
+    badge: {
         position: 'absolute',
-        top: -5,
-        right: -8,
-        backgroundColor: Colors.primary,
+        top: -4,
+        right: -4,
+        backgroundColor: Colors.googleBlue,
         borderRadius: 10,
-        minWidth: 16,
-        height: 16,
+        minWidth: 18,
+        height: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 2,
+        borderWidth: 2,
+        borderColor: '#202124',
     },
-    countText: {
+    badgeText: {
         color: Colors.white,
         fontSize: 10,
         fontWeight: 'bold',
