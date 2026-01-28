@@ -184,14 +184,22 @@ export default function MeetingScreen({ route, navigation }) {
     const handleShareScreen = () => setIsSharingScreen(!isSharingScreen);
 
     const renderParticipant = ({ item }) => {
+        const count = allParticipants.length;
+        let itemStyle = styles.videoWrapper;
+
+        if (count === 1) itemStyle = styles.singleVideo;
+        else if (count === 2) itemStyle = styles.doubleVideo;
+        else if (count <= 4) itemStyle = styles.quadVideo;
+        else itemStyle = styles.sixVideo;
+
         return (
-            <View style={styles.singleVideo}>
+            <View style={itemStyle}>
                 <VideoView
                     stream={item.isLocal ? localStream : null}
                     name={item.name}
                     isLocal={item.isLocal}
                     isMuted={item.isLocal ? !isMicOn : item.isMuted}
-                    isActiveSpeaker={true} // Local user is always prominent
+                    isActiveSpeaker={false} // Simple placeholder for now
                     isSharing={item.id === 'local' ? isSharingScreen : item.isSharing}
                 />
             </View>
